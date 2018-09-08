@@ -18,75 +18,78 @@ import numpy as np
 import tensorflow as tf
 
 from alexnet import AlexNet
-from datagenerator import ImageDataGenerator
 from datetime import datetime
-from tensorflow.contrib.data import Iterator
 
 """
 Configuration Part.
 """
 
 # Path to the textfiles for the trainings and validation set
-train_file = '/path/to/train.txt'
-val_file = '/path/to/val.txt'
+# train_file = '/path/to/train.txt'
+# val_file = '/path/to/val.txt'
 
 # Learning params
 learning_rate = 0.01
 num_epochs = 10
-batch_size = 128
+batch_size = 100
 
 # Network params
 dropout_rate = 0.5
-num_classes = 2
-train_layers = ['fc8', 'fc7', 'fc6']
+num_classes = 10
+train_layers = ['conv3', 'conv4', 'conv5', 'fc8', 'fc7', 'fc6']
 
 # How often we want to write the tf.summary data to disk
 display_step = 20
 
 # Path for tf.summary.FileWriter and to store model checkpoints
-filewriter_path = "/tmp/finetune_alexnet/tensorboard"
-checkpoint_path = "/tmp/finetune_alexnet/checkpoints"
+filewriter_path = "F:\\tensorboard"
+checkpoint_path = "F:\\checkpoints"
 
 """
 Main Part of the finetuning Script.
 """
+mnist = tf.keras.datasets.mnist
 
 # Create parent path if it doesn't exist
 if not os.path.isdir(checkpoint_path):
     os.mkdir(checkpoint_path)
 
 # Place data loading and preprocessing on the cpu
-with tf.device('/cpu:0'):
-    tr_data = ImageDataGenerator(train_file,
-                                 mode='training',
-                                 batch_size=batch_size,
-                                 num_classes=num_classes,
-                                 shuffle=True)
-    val_data = ImageDataGenerator(val_file,
-                                  mode='inference',
-                                  batch_size=batch_size,
-                                  num_classes=num_classes,
-                                  shuffle=False)
-
-    # create an reinitializable iterator given the dataset structure
-    iterator = Iterator.from_structure(tr_data.data.output_types,
-                                       tr_data.data.output_shapes)
-    next_batch = iterator.get_next()
-
+# with tf.device('/cpu:0'):
+#     tr_data = ImageDataGenerator(train_file,
+#                                  mode='training',
+#                                  batch_size=batch_size,
+#                                  num_classes=num_classes,
+#                                  shuffle=True)
+#     val_data = ImageDataGenerator(val_file,
+#                                   mode='inference',
+#                                   batch_size=batch_size,
+#                                   num_classes=num_classes,
+#                                   shuffle=False)
+#
+#     # create an reinitializable iterator given the dataset structure
+#     iterator = Iterator.from_structure(tr_data.data.output_types,
+#                                        tr_data.data.output_shapes)
+#     next_batch = iterator.get_next()
+#
 # Ops for initializing the two different iterators
-training_init_op = iterator.make_initializer(tr_data.data)
-validation_init_op = iterator.make_initializer(val_data.data)
+# training_init_op = iterator.make_initializer(tr_data.data)
+# validation_init_op = iterator.make_initializer(val_data.data)
+(x_train, y_train),(x_test, y_test) = mnist.load_data()
+x_train_size = len(x_train)
+x_test_size = len(x_test)
+x_train, x_test = x_train / 255.0, x_test / 255.0
 
 # TF placeholder for graph input and output
-x = tf.placeholder(tf.float32, [batch_size, 227, 227, 3])
+x = tf.placeholder(tf.float32, [batch_size, 28, 28, 3])
 y = tf.placeholder(tf.float32, [batch_size, num_classes])
-keep_prob = tf.placeholder(tf.float32)
+# keep_prob = tf.placeholder(tf.float32, name="keep_prob")
 
 # Initialize model
-model = AlexNet(x, keep_prob, num_classes, train_layers)
+model = AlexNet(x, num_classes, train_layers)
 
 # Link variable to model output
-score = model.fc8
+score = model.pool5[:,0,0,:]
 
 # List of trainable variables of the layers we want to train
 var_list = [v for v in tf.trainable_variables() if v.name.split('/')[0] in train_layers]
@@ -120,6 +123,7 @@ tf.summary.scalar('cross_entropy', loss)
 
 # Evaluation op: Accuracy of the model
 with tf.name_scope("accuracy"):
+    print(score.shape, y.shape)
     correct_pred = tf.equal(tf.argmax(score, 1), tf.argmax(y, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 
@@ -136,8 +140,9 @@ writer = tf.summary.FileWriter(filewriter_path)
 saver = tf.train.Saver()
 
 # Get the number of training/validation steps per epoch
-train_batches_per_epoch = int(np.floor(tr_data.data_size/batch_size))
-val_batches_per_epoch = int(np.floor(val_data.data_size / batch_size))
+print(x_train_size / batch_size)
+train_batches_per_epoch = int(np.floor(x_train_size / batch_size))
+val_batches_per_epoch = int(np.floor(x_test_size / batch_size))
 
 # Start Tensorflow session
 with tf.Session() as sess:
@@ -157,41 +162,64 @@ with tf.Session() as sess:
 
     # Loop over number of epochs
     for epoch in range(num_epochs):
+        current_x = 0
 
         print("{} Epoch number: {}".format(datetime.now(), epoch+1))
 
         # Initialize iterator with the training dataset
-        sess.run(training_init_op)
+        # sess.run(training_init_op)
 
         for step in range(train_batches_per_epoch):
 
             # get next batch of data
-            img_batch, label_batch = sess.run(next_batch)
+            a = x_train[current_x:current_x + batch_size]
+            b = y_train[current_x:current_x + batch_size]
+            next_batch = np.zeros((batch_size, 28, 28, 3))
+            next_batch[:, :, :, 0] = a
+            next_batch[:, :, :, 1] = a
+            next_batch[:, :, :, 2] = a
+            current_x = current_x + batch_size
+
+            label_batch = np.zeros((b.shape[0], 10))
+            for i in range(b.shape[0]):
+                label_batch[i, b[i]] = 1
+
+            # img_batch, label_batch = sess.run(next_batch)
 
             # And run the training op
-            sess.run(train_op, feed_dict={x: img_batch,
-                                          y: label_batch,
-                                          keep_prob: dropout_rate})
+            sess.run(train_op, feed_dict={x: next_batch,
+                                          y: label_batch})
 
             # Generate summary with the current batch of data and write to file
             if step % display_step == 0:
-                s = sess.run(merged_summary, feed_dict={x: img_batch,
-                                                        y: label_batch,
-                                                        keep_prob: 1.})
+                s = sess.run(merged_summary, feed_dict={x: next_batch,
+                                                        y: label_batch})
 
                 writer.add_summary(s, epoch*train_batches_per_epoch + step)
 
         # Validate the model on the entire validation set
         print("{} Start validation".format(datetime.now()))
-        sess.run(validation_init_op)
+        # sess.run(validation_init_op)
         test_acc = 0.
         test_count = 0
+        current_x = 0
         for _ in range(val_batches_per_epoch):
 
-            img_batch, label_batch = sess.run(next_batch)
-            acc = sess.run(accuracy, feed_dict={x: img_batch,
-                                                y: label_batch,
-                                                keep_prob: 1.})
+            a = x_test[current_x:current_x + batch_size]
+            b = y_test[current_x:current_x + batch_size]
+            next_batch = np.zeros((batch_size, 28, 28, 3))
+            next_batch[:, :, :, 0] = a
+            next_batch[:, :, :, 1] = a
+            next_batch[:, :, :, 2] = a
+            current_x = current_x + batch_size
+
+            label_batch = np.zeros((b.shape[0], 10))
+            for i in range(b.shape[0]):
+                label_batch[i, b[i]] = 1
+            # img_batch, label_batch = sess.run(next_batch)
+
+            acc = sess.run(accuracy, feed_dict={x: next_batch,
+                                                y: label_batch})
             test_acc += acc
             test_count += 1
         test_acc /= test_count
