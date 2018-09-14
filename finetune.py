@@ -75,7 +75,7 @@ if not os.path.isdir(checkpoint_path):
 # Ops for initializing the two different iterators
 # training_init_op = iterator.make_initializer(tr_data.data)
 # validation_init_op = iterator.make_initializer(val_data.data)
-(x_train, y_train),(x_test, y_test) = mnist.load_data()
+(x_train, yy_train), (x_test, y_test) = mnist.load_data()
 x_train_size = len(x_train)
 x_test_size = len(x_test)
 x_train, x_test = x_train / 255.0, x_test / 255.0
@@ -89,7 +89,7 @@ y = tf.placeholder(tf.float32, [batch_size, num_classes])
 model = AlexNet(x, num_classes, train_layers)
 
 # Link variable to model output
-score = model.pool5[:,0,0,:]
+score = model.pool5[:, 0, 0, :]
 
 # List of trainable variables of the layers we want to train
 var_list = [v for v in tf.trainable_variables() if v.name.split('/')[0] in train_layers]
@@ -97,7 +97,7 @@ var_list = [v for v in tf.trainable_variables() if v.name.split('/')[0] in train
 # Op for calculating the loss
 with tf.name_scope("cross_ent"):
     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=score,
-                                                                  labels=y))
+                                                                  labels=yy))
 
 # Train op
 with tf.name_scope("train"):
@@ -120,10 +120,8 @@ for var in var_list:
 # Add the loss to summary
 tf.summary.scalar('cross_entropy', loss)
 
-
 # Evaluation op: Accuracy of the model
 with tf.name_scope("accuracy"):
-    print(score.shape, y.shape)
     correct_pred = tf.equal(tf.argmax(score, 1), tf.argmax(y, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 
@@ -146,7 +144,6 @@ val_batches_per_epoch = int(np.floor(x_test_size / batch_size))
 
 # Start Tensorflow session
 with tf.Session() as sess:
-
     # Initialize all variables
     sess.run(tf.global_variables_initializer())
 
@@ -164,7 +161,7 @@ with tf.Session() as sess:
     for epoch in range(num_epochs):
         current_x = 0
 
-        print("{} Epoch number: {}".format(datetime.now(), epoch+1))
+        print("{} Epoch number: {}".format(datetime.now(), epoch + 1))
 
         # Initialize iterator with the training dataset
         # sess.run(training_init_op)
@@ -173,29 +170,29 @@ with tf.Session() as sess:
 
             # get next batch of data
             a = x_train[current_x:current_x + batch_size]
-            b = y_train[current_x:current_x + batch_size]
+            # b = y_train[current_x:current_x + batch_size]
             next_batch = np.zeros((batch_size, 28, 28, 3))
             next_batch[:, :, :, 0] = a
             next_batch[:, :, :, 1] = a
             next_batch[:, :, :, 2] = a
             current_x = current_x + batch_size
 
-            label_batch = np.zeros((b.shape[0], 10))
-            for i in range(b.shape[0]):
-                label_batch[i, b[i]] = 1
+            # label_batch = np.zeros((b.shape[0], 10))
+            # for i in range(b.shape[0]):
+            #     label_batch[i, b[i]] = 1
 
             # img_batch, label_batch = sess.run(next_batch)
 
             # And run the training op
-            sess.run(train_op, feed_dict={x: next_batch,
-                                          y: label_batch})
+            sess.run(train_op, feed_dict={x: next_batch})
+            # y: label_batch})
 
             # Generate summary with the current batch of data and write to file
             if step % display_step == 0:
-                s = sess.run(merged_summary, feed_dict={x: next_batch,
-                                                        y: label_batch})
+                s = sess.run(merged_summary, feed_dict={x: next_batch})
+                # y: label_batch})
 
-                writer.add_summary(s, epoch*train_batches_per_epoch + step)
+                writer.add_summary(s, epoch * train_batches_per_epoch + step)
 
         # Validate the model on the entire validation set
         print("{} Start validation".format(datetime.now()))
@@ -229,7 +226,7 @@ with tf.Session() as sess:
 
         # save checkpoint of the model
         checkpoint_name = os.path.join(checkpoint_path,
-                                       'model_epoch'+str(epoch+1)+'.ckpt')
+                                       'model_epoch' + str(epoch + 1) + '.ckpt')
         save_path = saver.save(sess, checkpoint_name)
 
         print("{} Model checkpoint saved at {}".format(datetime.now(),
