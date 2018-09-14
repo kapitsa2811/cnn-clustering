@@ -97,7 +97,7 @@ var_list = [v for v in tf.trainable_variables() if v.name.split('/')[0] in train
 # Op for calculating the loss
 with tf.name_scope("cross_ent"):
     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=score,
-                                                                  labels=yy))
+                                                                  labels=y))  # TODO-Fix-y
 
 # Train op
 with tf.name_scope("train"):
@@ -142,6 +142,8 @@ print(x_train_size / batch_size)
 train_batches_per_epoch = int(np.floor(x_train_size / batch_size))
 val_batches_per_epoch = int(np.floor(x_test_size / batch_size))
 
+kmeans = tf.contrib.factorization.KMeansClustering(num_clusters=num_classes, use_mini_batch=True)
+
 # Start Tensorflow session
 with tf.Session() as sess:
     # Initialize all variables
@@ -157,6 +159,18 @@ with tf.Session() as sess:
     print("{} Open Tensorboard at --logdir {}".format(datetime.now(),
                                                       filewriter_path))
 
+    flattened = tf.reshape(model.conv3, [100, -1])
+    a = x_train[0:100]
+    first_batch = np.zeros((100, 28, 28, 3))
+    first_batch[:, :, :, 0] = a
+    first_batch[:, :, :, 1] = a
+    first_batch[:, :, :, 2] = a
+    first_out = sess.run(flattened, feed_dict={x: first_batch})
+    input_fn = lambda: tf.train.limit_epochs(tf.convert_to_tensor(first_out, dtype=tf.float32), num_epochs=1)
+    index = kmeans.train(input_fn).predict_cluster_index(input_fn)
+    centers = kmeans.cluster_centers()
+    print("cluster index:", list(index))
+
     # Loop over number of epochs
     for epoch in range(num_epochs):
         current_x = 0
@@ -167,7 +181,7 @@ with tf.Session() as sess:
         # sess.run(training_init_op)
 
         for step in range(train_batches_per_epoch):
-
+            print("batch", step, train_batches_per_epoch)
             # get next batch of data
             a = x_train[current_x:current_x + batch_size]
             # b = y_train[current_x:current_x + batch_size]
@@ -177,20 +191,22 @@ with tf.Session() as sess:
             next_batch[:, :, :, 2] = a
             current_x = current_x + batch_size
 
-            # label_batch = np.zeros((b.shape[0], 10))
-            # for i in range(b.shape[0]):
-            #     label_batch[i, b[i]] = 1
+            next_out = sess.run(flattened, feed_dict={x: next_batch})
+            input_fn = lambda: tf.train.limit_epochs(tf.convert_to_tensor(next_out, dtype=tf.float32), num_epochs=1)
+            index = kmeans.train(input_fn).predict_cluster_index(input_fn)
+            b = list(index)
+            label_batch = np.zeros((len(b), 10))
+            for i in range(len(b)):
+                label_batch[i, b[i]] = 1
 
             # img_batch, label_batch = sess.run(next_batch)
 
             # And run the training op
-            sess.run(train_op, feed_dict={x: next_batch})
-            # y: label_batch})
+            sess.run(train_op, feed_dict={x: next_batch, y: label_batch})
 
             # Generate summary with the current batch of data and write to file
             if step % display_step == 0:
-                s = sess.run(merged_summary, feed_dict={x: next_batch})
-                # y: label_batch})
+                s = sess.run(merged_summary, feed_dict={x: next_batch, y: label_batch})
 
                 writer.add_summary(s, epoch * train_batches_per_epoch + step)
 
