@@ -31,7 +31,7 @@ Configuration Part.
 # Learning params
 learning_rate = 0.01
 num_epochs = 10
-batch_size = 100
+batch_size = 5000
 
 # Network params
 dropout_rate = 0.5
@@ -159,26 +159,31 @@ with tf.Session() as sess:
     print("{} Open Tensorboard at --logdir {}".format(datetime.now(),
                                                       filewriter_path))
 
-    flattened = tf.reshape(model.conv3, [100, -1])
-    a = x_train[0:100]
-    first_batch = np.zeros((100, 28, 28, 3))
-    first_batch[:, :, :, 0] = a
-    first_batch[:, :, :, 1] = a
-    first_batch[:, :, :, 2] = a
-    first_out = sess.run(flattened, feed_dict={x: first_batch})
-    input_fn = lambda: tf.train.limit_epochs(tf.convert_to_tensor(first_out, dtype=tf.float32), num_epochs=1)
-    index = kmeans.train(input_fn).predict_cluster_index(input_fn)
-    centers = kmeans.cluster_centers()
-    print("cluster index:", list(index))
+    flattened = tf.reshape(model.conv3, [-1, 2 * 2 * 10])
 
     # Loop over number of epochs
     for epoch in range(num_epochs):
         current_x = 0
+        #TODO-Batch train kmeans
 
         print("{} Epoch number: {}".format(datetime.now(), epoch + 1))
 
         # Initialize iterator with the training dataset
         # sess.run(training_init_op)
+        first_x = 0
+        for step in range(train_batches_per_epoch):
+            print("loop", step, train_batches_per_epoch)
+            a = x_train[first_x:first_x + batch_size]
+            first_x = first_x + batch_size
+            first_batch = np.zeros((batch_size, 28, 28, 3))
+            first_batch[:, :, :, 0] = a
+            first_batch[:, :, :, 1] = a
+            first_batch[:, :, :, 2] = a
+            first_out = sess.run(flattened, feed_dict={x: first_batch})
+            input_fn = lambda: tf.train.limit_epochs(tf.convert_to_tensor(first_out, dtype=tf.float32), num_epochs=1)
+            kmeans.train(input_fn)
+
+        print("trained kmeans")
 
         for step in range(train_batches_per_epoch):
             print("batch", step, train_batches_per_epoch)
@@ -192,8 +197,9 @@ with tf.Session() as sess:
             current_x = current_x + batch_size
 
             next_out = sess.run(flattened, feed_dict={x: next_batch})
-            input_fn = lambda: tf.train.limit_epochs(tf.convert_to_tensor(next_out, dtype=tf.float32), num_epochs=1)
-            index = kmeans.train(input_fn).predict_cluster_index(input_fn)
+            input_fn = lambda: tf.train.limit_epochs(tf.convert_to_tensor(first_out, dtype=tf.float32), num_epochs=1)
+            # index = kmeans.train(input_fn).predict_cluster_index(input_fn)
+            index = kmeans.predict_cluster_index(input_fn)
             b = list(index)
             label_batch = np.zeros((len(b), 10))
             for i in range(len(b)):
