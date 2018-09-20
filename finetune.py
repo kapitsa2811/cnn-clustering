@@ -20,6 +20,29 @@ import tensorflow as tf
 from alexnet import AlexNet
 from datetime import datetime
 
+import itertools
+import operator
+
+def most_common(L):
+    # get an iterable of (item, iterable) pairs
+    SL = sorted((x, i) for i, x in enumerate(L))
+    # print 'SL:', SL
+    groups = itertools.groupby(SL, key=operator.itemgetter(0))
+
+    # auxiliary function to get "quality" for an item
+    def _auxfun(g):
+        item, iterable = g
+        count = 0
+        min_index = len(L)
+        for _, where in iterable:
+            count += 1
+            min_index = min(min_index, where)
+        # print 'item %r, count %r, minind %r' % (item, count, min_index)
+        return count, -min_index
+
+    # pick the highest-count/earliest item
+    return max(groups, key=_auxfun)[0]
+
 """
 Configuration Part.
 """
@@ -122,6 +145,7 @@ tf.summary.scalar('cross_entropy', loss)
 
 # Evaluation op: Accuracy of the model
 with tf.name_scope("accuracy"):
+    thelabel = tf.argmax(score, 1)
     correct_pred = tf.equal(tf.argmax(score, 1), tf.argmax(y, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 
@@ -216,34 +240,64 @@ with tf.Session() as sess:
 
                 writer.add_summary(s, epoch * train_batches_per_epoch + step)
 
-        # Validate the model on the entire validation set
-        print("{} Start validation".format(datetime.now()))
-        # sess.run(validation_init_op)
-        test_acc = 0.
-        test_count = 0
+        y_label = np.zeros(y_test.shape, dtype=int)
+        label_map = np.zeros(10)
         current_x = 0
         for _ in range(val_batches_per_epoch):
-
             a = x_test[current_x:current_x + batch_size]
-            b = y_test[current_x:current_x + batch_size]
             next_batch = np.zeros((batch_size, 28, 28, 3))
             next_batch[:, :, :, 0] = a
             next_batch[:, :, :, 1] = a
             next_batch[:, :, :, 2] = a
+
+            label = sess.run(thelabel, feed_dict={x: next_batch})
+            y_label[current_x:current_x + batch_size] = label
             current_x = current_x + batch_size
 
-            label_batch = np.zeros((b.shape[0], 10))
-            for i in range(b.shape[0]):
-                label_batch[i, b[i]] = 1
-            # img_batch, label_batch = sess.run(next_batch)
+        result = list(zip(y_label, y_test))
+        for i in range(10):
+            list = [x[1] for x in result if x[0] == i]
+            label = most_common(list) if (len(list) > 0) else -1
+            print("label:", i, label)
+            label_map[i] = label
 
-            acc = sess.run(accuracy, feed_dict={x: next_batch,
-                                                y: label_batch})
-            test_acc += acc
-            test_count += 1
-        test_acc /= test_count
-        print("{} Validation Accuracy = {:.4f}".format(datetime.now(),
-                                                       test_acc))
+        n_correct = 0
+        for i in range(len(y_label)):
+            y_label[i] = label_map[y_label[i]]
+            if y_label[i] == y_test[i]:
+                n_correct = n_correct + 1
+
+        print("accuracy:", n_correct / len(y_test))
+        print(y_label)
+        #
+        # # Validate the model on the entire validation set
+        # print("{} Start validation".format(datetime.now()))
+        # # sess.run(validation_init_op)
+        # test_acc = 0.
+        # test_count = 0
+        # current_x = 0
+        # for _ in range(val_batches_per_epoch):
+        #
+        #     a = x_test[current_x:current_x + batch_size]
+        #     b = y_test[current_x:current_x + batch_size]
+        #     next_batch = np.zeros((batch_size, 28, 28, 3))
+        #     next_batch[:, :, :, 0] = a
+        #     next_batch[:, :, :, 1] = a
+        #     next_batch[:, :, :, 2] = a
+        #     current_x = current_x + batch_size
+        #
+        #     label_batch = np.zeros((b.shape[0], 10))
+        #     for i in range(b.shape[0]):
+        #         label_batch[i, b[i]] = 1
+        #     # img_batch, label_batch = sess.run(next_batch)
+        #
+        #     acc = sess.run(accuracy, feed_dict={x: next_batch,
+        #                                         y: label_batch})
+        #     test_acc += acc
+        #     test_count += 1
+        # test_acc /= test_count
+        # print("{} Validation Accuracy = {:.4f}".format(datetime.now(),
+        #                                                test_acc))
         print("{} Saving checkpoint of model...".format(datetime.now()))
 
         # save checkpoint of the model

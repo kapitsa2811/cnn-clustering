@@ -66,7 +66,7 @@ class AlexNet(object):
         conv2 = conv(pool1, 5, 5, 256, 1, 1, groups=2, name='conv2')
         norm2 = lrn(conv2, 2, 1e-05, 0.75, name='norm2')
         pool2 = max_pool(norm2, 3, 3, 2, 2, name='pool2')
-        
+
         # 3rd Layer: Conv (w ReLu)
         self.conv3 = conv(pool2, 3, 3, 10, 1, 1, name='conv3')
 
