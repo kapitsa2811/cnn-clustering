@@ -23,17 +23,18 @@ from datetime import datetime
 import itertools
 import operator
 
-def most_common(L):
+
+def most_common(l):
     # get an iterable of (item, iterable) pairs
-    SL = sorted((x, i) for i, x in enumerate(L))
+    sl = sorted((xx, ii) for ii, xx in enumerate(l))
     # print 'SL:', SL
-    groups = itertools.groupby(SL, key=operator.itemgetter(0))
+    groups = itertools.groupby(sl, key=operator.itemgetter(0))
 
     # auxiliary function to get "quality" for an item
     def _auxfun(g):
         item, iterable = g
         count = 0
-        min_index = len(L)
+        min_index = len(l)
         for _, where in iterable:
             count += 1
             min_index = min(min_index, where)
@@ -42,6 +43,7 @@ def most_common(L):
 
     # pick the highest-count/earliest item
     return max(groups, key=_auxfun)[0]
+
 
 """
 Configuration Part.
@@ -162,7 +164,6 @@ writer = tf.summary.FileWriter(filewriter_path)
 saver = tf.train.Saver()
 
 # Get the number of training/validation steps per epoch
-print(x_train_size / batch_size)
 train_batches_per_epoch = int(np.floor(x_train_size / batch_size))
 val_batches_per_epoch = int(np.floor(x_test_size / batch_size))
 
@@ -188,7 +189,7 @@ with tf.Session() as sess:
     # Loop over number of epochs
     for epoch in range(num_epochs):
         current_x = 0
-        #TODO-Batch train kmeans
+        # TODO-Batch train kmeans
 
         print("{} Epoch number: {}".format(datetime.now(), epoch + 1))
 
@@ -196,7 +197,7 @@ with tf.Session() as sess:
         # sess.run(training_init_op)
         first_x = 0
         for step in range(train_batches_per_epoch):
-            print("loop", step, train_batches_per_epoch)
+            print("training kmeans", step, "out of", train_batches_per_epoch)
             a = x_train[first_x:first_x + batch_size]
             first_x = first_x + batch_size
             first_batch = np.zeros((batch_size, 28, 28, 3))
@@ -207,10 +208,10 @@ with tf.Session() as sess:
             input_fn = lambda: tf.train.limit_epochs(tf.convert_to_tensor(first_out, dtype=tf.float32), num_epochs=1)
             kmeans.train(input_fn)
 
-        print("trained kmeans")
+        print("kmeans trained")
 
         for step in range(train_batches_per_epoch):
-            print("batch", step, train_batches_per_epoch)
+            print("training cnn", step, "out of", train_batches_per_epoch)
             # get next batch of data
             a = x_train[current_x:current_x + batch_size]
             # b = y_train[current_x:current_x + batch_size]
@@ -221,9 +222,10 @@ with tf.Session() as sess:
             current_x = current_x + batch_size
 
             next_out = sess.run(flattened, feed_dict={x: next_batch})
-            input_fn = lambda: tf.train.limit_epochs(tf.convert_to_tensor(first_out, dtype=tf.float32), num_epochs=1)
+            input_fn = lambda: tf.train.limit_epochs(tf.convert_to_tensor(next_out, dtype=tf.float32), num_epochs=1)
             # index = kmeans.train(input_fn).predict_cluster_index(input_fn)
             index = kmeans.predict_cluster_index(input_fn)
+            print(type(index), " size:", next_out.shape)
             b = list(index)
             label_batch = np.zeros((len(b), 10))
             for i in range(len(b)):
@@ -256,10 +258,10 @@ with tf.Session() as sess:
 
         result = list(zip(y_label, y_test))
         for i in range(10):
-            list = [x[1] for x in result if x[0] == i]
-            label = most_common(list) if (len(list) > 0) else -1
-            print("label:", i, label)
-            label_map[i] = label
+            listI = [x[1] for x in result if x[0] == i]
+            labelI = most_common(listI) if (len(listI) > 0) else -1
+            print("label:", i, labelI)
+            label_map[i] = labelI
 
         n_correct = 0
         for i in range(len(y_label)):
