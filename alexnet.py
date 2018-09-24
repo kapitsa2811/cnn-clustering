@@ -68,18 +68,18 @@ class AlexNet(object):
         pool2 = max_pool(norm2, 3, 3, 2, 2, name='pool2')
 
         # 3rd Layer: Conv (w ReLu)
-        self.conv3 = conv(pool2, 3, 3, 10, 1, 1, name='conv3')
+        conv3 = conv(pool2, 3, 3, 10, 1, 1, name='conv3')
 
         # 4th Layer: Conv (w ReLu) splitted into two groups
         # conv4 = conv(conv3, 3, 3, 384, 1, 1, groups=2, name='conv4')
 
         # 5th Layer: Conv (w ReLu) -> Pool splitted into two groups
         # conv5 = conv(conv4, 3, 3, 256, 1, 1, groups=2, name='conv5')
-        self.pool5 = max_pool(self.conv3, 3, 3, 2, 2, name='pool5')
+        pool5 = max_pool(conv3, 3, 3, 2, 2, name='pool5')
 
         # 6th Layer: Flatten -> FC (w ReLu) -> Dropout
-        # flattened = tf.reshape(pool5, [-1, 6*6*256])
-        # fc6 = fc(flattened, 6*6*256, 4096, name='fc6')
+        flattened = tf.reshape(pool5, [-1, 10])
+        self.fc6 = fc(flattened, 10, 10, name='fc')
         # dropout6 = dropout(fc6, self.KEEP_PROB)
 
         # 7th Layer: FC (w ReLu) -> Dropout
