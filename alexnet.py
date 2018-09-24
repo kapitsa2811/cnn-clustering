@@ -67,27 +67,15 @@ class AlexNet(object):
         norm2 = lrn(conv2, 2, 1e-05, 0.75, name='norm2')
         pool2 = max_pool(norm2, 3, 3, 2, 2, name='pool2')
 
-        # 3rd Layer: Conv (w ReLu)
+        # 3rd Layer: Conv
         conv3 = conv(pool2, 3, 3, 10, 1, 1, name='conv3')
 
-        # 4th Layer: Conv (w ReLu) splitted into two groups
-        # conv4 = conv(conv3, 3, 3, 384, 1, 1, groups=2, name='conv4')
-
-        # 5th Layer: Conv (w ReLu) -> Pool splitted into two groups
-        # conv5 = conv(conv4, 3, 3, 256, 1, 1, groups=2, name='conv5')
+        # 4th Layer: Global max pooling
         pool5 = max_pool(conv3, 3, 3, 2, 2, name='pool5')
 
-        # 6th Layer: Flatten -> FC (w ReLu) -> Dropout
+        # 5th Layer: Flattening ~> Fully connected
         flattened = tf.reshape(pool5, [-1, 10])
         self.fc6 = fc(flattened, 10, 10, name='fc')
-        # dropout6 = dropout(fc6, self.KEEP_PROB)
-
-        # 7th Layer: FC (w ReLu) -> Dropout
-        # fc7 = fc(dropout6, 4096, 4096, name='fc7')
-        # dropout7 = dropout(fc7, self.KEEP_PROB)
-
-        # 8th Layer: FC and return unscaled activations
-        # self.fc8 = fc(dropout7, 4096, self.NUM_CLASSES, relu=False, name='fc8')
 
     def load_initial_weights(self, session):
         """Load weights from file into network.
