@@ -108,6 +108,7 @@ with tf.name_scope("train"):
 
 # Clustering
 kmeans = tf.contrib.factorization.KMeansClustering(num_clusters=num_classes, use_mini_batch=True)
+previous_centers = None
 
 # Start Tensorflow session
 with tf.Session() as sess:
@@ -130,7 +131,20 @@ with tf.Session() as sess:
 
             featureVector = sess.run(featureNode, feed_dict={x: train_batches[step]})
             featureTensor = lambda: tf.train.limit_epochs(tf.convert_to_tensor(featureVector, dtype=tf.float32), num_epochs=1)
-            cluster_indexes = list(kmeans.train(featureTensor).predict_cluster_index(featureTensor))
+            kmeans.train(featureTensor)
+            predictResult = list(kmeans.transform(featureTensor))
+            cluster_centers = kmeans.cluster_centers()
+            if previous_centers is not None:
+                print('delta:', cluster_centers - previous_centers)
+            previous_centers = cluster_centers
+
+            cluster_indexes = list(kmeans.predict_cluster_index(featureTensor))
+            # cluster_indexes = list(kmeans.train(featureTensor).predict_cluster_index(featureTensor))
+            # predictResult = list(kmeans.predict(featureTensor))
+            # print("kmeans indexes:", predictResult)
+            print("cluster indexes:", cluster_indexes)
+            print("cluster predict result:", predictResult)
+            print("kmeans score:", kmeans.score(featureTensor))
 
             label_batch = np.zeros((batch_size, 10))
             for i in range(batch_size):
@@ -148,7 +162,7 @@ with tf.Session() as sess:
             featureVector = sess.run(featureNode, feed_dict={x: test_batches[step]})
             featureTensor = lambda: tf.train.limit_epochs(tf.convert_to_tensor(featureVector, dtype=tf.float32), num_epochs=1)
             cluster_indexes = list(kmeans.predict_cluster_index(featureTensor))
-
+            print("test input:", featureVector)
             print("test indexes", cluster_indexes)
             y_label[current_x:current_x + batch_size] = cluster_indexes
             current_x = current_x + batch_size
