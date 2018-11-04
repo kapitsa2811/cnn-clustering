@@ -43,6 +43,7 @@ mnist = tf.keras.datasets.mnist
 x_train_size = len(x_train)
 x_test_size = len(x_test)
 x_train, x_test = x_train / 255.0, x_test / 255.0
+regularization_constant = 1.0
 
 # Get the number of training/validation steps per epoch
 train_batches_per_epoch = int(np.floor(x_train_size / batch_size))
@@ -79,6 +80,7 @@ Main Part of the finetuning Script.
 """
 
 # TF placeholder for graph input and output
+r = tf.get_variable("r", shape=(), dtype=tf.float32)
 x = tf.placeholder(tf.float32, [batch_size, 28, 28, 3])
 y = tf.placeholder(tf.float32, [batch_size, num_classes])
 
@@ -93,8 +95,8 @@ var_list = [v for v in tf.trainable_variables() if v.name.split('/')[0] in train
 
 # Op for calculating the loss
 with tf.name_scope("cross_ent"):
-    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=featureNode,
-                                                                  labels=y))
+    lossTemp = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=featureNode, labels=y))
+    loss = lossTemp + r
 
 # Train op
 with tf.name_scope("train"):
@@ -130,28 +132,55 @@ with tf.Session() as sess:
             print("training cnn", step, "out of", train_batches_per_epoch)
 
             featureVector = sess.run(featureNode, feed_dict={x: train_batches[step]})
-            featureTensor = lambda: tf.train.limit_epochs(tf.convert_to_tensor(featureVector, dtype=tf.float32), num_epochs=1)
+            featureTensor = lambda: tf.train.limit_epochs(tf.convert_to_tensor(featureVector, dtype=tf.float32),
+                                                          num_epochs=1)
             kmeans.train(featureTensor)
+
             predictResult = list(kmeans.transform(featureTensor))
+            predictResultWithIndex = [(val.item(0), idx) for (idx, val) in enumerate(predictResult)]
+
+            def takeFirst(elem):
+                return elem[0]
+            sortedResults = sorted(predictResultWithIndex, key=takeFirst)
+            minIndexes = [x[1] for x in sortedResults[:1000]]
+
+            # print("predictResultShape", minIndexes)
             cluster_centers = kmeans.cluster_centers()
-            if previous_centers is not None:
-                print('delta:', cluster_centers - previous_centers)
+            # if previous_centers is not None:
+            #     print('delta:', cluster_centers - previous_centers)
             previous_centers = cluster_centers
 
             cluster_indexes = list(kmeans.predict_cluster_index(featureTensor))
+            cluster_length = len(set(cluster_indexes))
             # cluster_indexes = list(kmeans.train(featureTensor).predict_cluster_index(featureTensor))
             # predictResult = list(kmeans.predict(featureTensor))
             # print("kmeans indexes:", predictResult)
             print("cluster indexes:", cluster_indexes)
-            print("cluster predict result:", predictResult)
+            print("cluster indexes:", cluster_length)
+            # print("cluster predict result:", predictResult)
             print("kmeans score:", kmeans.score(featureTensor))
 
             label_batch = np.zeros((batch_size, 10))
             for i in range(batch_size):
                 label_batch[i, cluster_indexes[i]] = 1
 
+            filteredTrainBatch = [train_batches[step][i] for i in minIndexes]
+            filteredLabelBatch = [label_batch[i] for i in minIndexes]
+            trainBatch = filteredTrainBatch + filteredTrainBatch + \
+                         filteredTrainBatch + filteredTrainBatch + filteredTrainBatch
+            labelBatch = filteredLabelBatch + filteredLabelBatch + \
+                         filteredLabelBatch + filteredLabelBatch + filteredLabelBatch
+
             # And run the training op
-            sess.run(train_op, feed_dict={x: train_batches[step], y: label_batch})
+            lossWithRegularization = sess.run(loss, feed_dict={x: trainBatch, y: labelBatch,
+                                                               r: (10 - cluster_length) * regularization_constant})
+            lossWithoutRegularization = sess.run(lossTemp, feed_dict={x: trainBatch, y: labelBatch,
+                                                                      r: (10 - cluster_length) * regularization_constant})
+
+            print("lossWithRegularization:", lossWithRegularization,
+                  "lossWithoutRegularization", lossWithoutRegularization)
+            sess.run(train_op, feed_dict={x: trainBatch, y: labelBatch,
+                                          r: (10 - cluster_length) * regularization_constant})
 
         # Evaluation
         print("{} Start evaluation".format(datetime.now()))
@@ -160,7 +189,8 @@ with tf.Session() as sess:
         current_x = 0
         for step in range(val_batches_per_epoch):
             featureVector = sess.run(featureNode, feed_dict={x: test_batches[step]})
-            featureTensor = lambda: tf.train.limit_epochs(tf.convert_to_tensor(featureVector, dtype=tf.float32), num_epochs=1)
+            featureTensor = lambda: tf.train.limit_epochs(tf.convert_to_tensor(featureVector, dtype=tf.float32),
+                                                          num_epochs=1)
             cluster_indexes = list(kmeans.predict_cluster_index(featureTensor))
             print("test input:", featureVector)
             print("test indexes", cluster_indexes)
